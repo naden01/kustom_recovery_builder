@@ -9,6 +9,7 @@ on:
         default: '14.1'
         type: choice
         options:
+        - 16.0
         - 14.1
         - 12.1
         - 11.0
@@ -96,7 +97,7 @@ jobs:
             ""
             
     - name: Set-up Manifest
-      if: github.event.inputs.MANIFEST_BRANCH == '11.0' || github.event.inputs.MANIFEST_BRANCH == '12.1' || github.event.inputs.MANIFEST_BRANCH == '14.1'
+      if: github.event.inputs.MANIFEST_BRANCH == '11.0' || github.event.inputs.MANIFEST_BRANCH == '12.1' || github.event.inputs.MANIFEST_BRANCH == '14.1' || github.event.inputs.MANIFEST_BRANCH == '16.0'
       run: |
         mkdir -p ${GITHUB_WORKSPACE}/OrangeFox
         cd ${GITHUB_WORKSPACE}/OrangeFox
@@ -116,14 +117,15 @@ jobs:
       continue-on-error: true
         
     - name: Check Manifest Branch
-      uses: haya14busa/action-cond@v1
-      id: fox_branch
-      with:
-        cond: ${{ github.event.inputs.MANIFEST_BRANCH == '11.0' || github.event.inputs.MANIFEST_BRANCH == '12.1' || github.event.inputs.MANIFEST_BRANCH == '14.1' }}
-        if_true: lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image
-        if_false: lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}image
+      run: |
+        if [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "16.0" ]; then
+            echo "LUNCH_CMD=lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-bp2a-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
+        elif [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "11.0" ] || [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "12.1" ] || [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "14.1" ]; then
+            echo "LUNCH_CMD=lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
+        else
+            echo "LUNCH_CMD=lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
+        fi
       continue-on-error: true
-     
     - name: Building OrangeFox
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
@@ -131,7 +133,7 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         set -e
-        ${{ steps.fox_branch.outputs.value }}
+        eval "${LUNCH_CMD}"
       continue-on-error: true
       
     - name: Set Build Date # For Build Date Info, currently using Asia/Manila
