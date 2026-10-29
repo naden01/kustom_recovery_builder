@@ -154,15 +154,38 @@ jobs:
         fi
       continue-on-error: true
 
+    - name: Restore ccache
+      uses: actions/cache/restore@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+        restore-keys: |
+          ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-
+      continue-on-error: true
     - name: Building Image 
+      env:
+        USE_CCACHE: "1"
+        CCACHE_EXEC: /usr/bin/ccache
+        CCACHE_DIR: /home/runner/.ccache
+        CCACHE_MAXSIZE: "4G"
+        CCACHE_COMPRESS: "1"
+        CCACHE_COMPILERCHECK: "content"
       run: |
         cd android-recovery
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-bp2a-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        lunch ${{ env.DEVICE_MAKEFILE }}-bp2a-eng && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
         echo "Done building your ${{ github.event.inputs.BUILD_TARGET }}.img"
       continue-on-error: true
       
+    - name: Save ccache
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+      continue-on-error: true
+
     - name: Set Build Date # Output will be use in Release
       run: |
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
