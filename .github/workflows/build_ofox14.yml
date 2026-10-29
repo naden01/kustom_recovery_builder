@@ -61,6 +61,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
       
+    - name: Set device tree links
+      run: |
+        TREE="${{ github.event.inputs.DEVICE_TREE }}"
+        TREE="${TREE%/}"
+        TREE="${TREE%.git}"
+        echo "CLEAN_DEVICE_TREE=${TREE}" >> $GITHUB_ENV
+        echo "device tree (clean): ${TREE}"
+      continue-on-error: true
+
     - name: Clean-up
       uses: rokibhasansagar/slimhub_actions@main
 
@@ -191,8 +200,8 @@ jobs:
         tag_name: ${{ github.run_id }}
         body: |
           Build: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: [Device Tree/Branch](${{ github.event.inputs.DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
-          Commit: Most recent [commit](${{ github.event.inputs.DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
+          Device: [Device Tree/Branch](${{ env.CLEAN_DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
+          Commit: Most recent [commit](${{ env.CLEAN_DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
           MD5 (img): ${{ env.MD5_IMG }}
           MD5 (zip): ${{ env.MD5_ZIP }}
       continue-on-error: true
