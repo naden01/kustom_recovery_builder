@@ -242,6 +242,6 @@ jobs:
        "${{ env.BUILD_DATE }}" \
        "${{ env.COMMIT_ID }}" \
        "${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.run_id }}" \
-       "${{ github.event.inputs.DEVICE_TREE }}" \
+       "${{ env.CLEAN_DEVICE_TREE }}" \
        "${{ secrets.TELEGRAM_CHAT_ID }}" \
        "${{ secrets.TELEGRAM_TOKEN }}"
