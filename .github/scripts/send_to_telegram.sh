@@ -71,7 +71,7 @@ send_file() {
     local PART_NUM=1
     for PART in "${FILE_PATH}.part_"*; do
       send_file "$PART" "${CAPTION} (part ${PART_NUM})"
-      (( PART_NUM++ ))
+      PART_NUM=$(( PART_NUM + 1 ))
     done
     rm -f "${FILE_PATH}.part_"*
     return 0
@@ -120,7 +120,7 @@ download_github_logs() {
   unzip -q "$OUT_ZIP" -d "$OUT_DIR"
 
   # Merge all step logs sorted by name (step order)
-  find "$OUT_DIR" -name "*.txt" | sort | xargs cat > "$MERGED"
+  find "$OUT_DIR" -name "*.txt" | sort -t_ -k1,1n | while IFS= read -r f; do { echo "===== $(basename "$f") ====="; cat "$f"; echo; }; done > "$MERGED"
 
   local MERGED_SIZE
   MERGED_SIZE=$(stat -c%s "$MERGED" 2>/dev/null || stat -f%z "$MERGED")
@@ -160,7 +160,14 @@ fi
 #  MODE: release
 # ─────────────────────────────────────────────
 if [[ "$MODE" == "release" ]]; then
-  CLEAN_TREE=$(echo "${DEVICE_TREE}" | sed 's/\.git$//')
+  CLEAN_TREE=$(printf '%s' "${DEVICE_TREE}" | sed -e 's#/$##' -e 's#\.git$##' -e 's#/$##')
+  if [[ -n "$CLEAN_TREE" ]]; then
+    COMMIT_LINE="📝 *Commit*: [${COMMIT_ID:0:7}](${CLEAN_TREE}/commit/${COMMIT_ID})"
+    TREE_LINE="🌳 *Tree*: [${CLEAN_TREE##*/}](${CLEAN_TREE}/tree/${BRANCH})"
+  else
+    COMMIT_LINE="📝 *Commit*: \`${COMMIT_ID:0:7}\`"
+    TREE_LINE=""
+  fi
 
   text=$(cat << EOF
 🚀 *Unofficial Custom Recovery Build Released*
@@ -168,7 +175,8 @@ if [[ "$MODE" == "release" ]]; then
 📱 *Device*: \`$(escape_md "${DEVICE}")\`
 🌿 *Branch*: \`$(escape_md "${BRANCH}")\`
 📅 *Build Date*: \`$(escape_md "${BUILD_DATE}")\`
-📝 *Commit*: [${COMMIT_ID:0:7}](${CLEAN_TREE}/commit/${COMMIT_ID})
+${COMMIT_LINE}
+${TREE_LINE}
 🔗 [View Release on GitHub](${RELEASE_URL})
 🪵 [Full Workflow Log](${WORKFLOW_RUN_URL})
 EOF
@@ -178,7 +186,14 @@ EOF
   # Download logs — runs in subshell so set -e won't kill us on failure
   LOG_FILE=$(download_github_logs) || true
   if [[ -f "$LOG_FILE" ]]; then
-    send_file "$LOG_FILE" "🪵 *Workflow Log* \`$(escape_md "${DEVICE}")\`"
+    LOG_SIZE=$(stat -c%s "$LOG_FILE" 2>/dev/null || stat -f%z "$LOG_FILE")
+    if (( LOG_SIZE > 25000000 )); then
+      echo "⚠️ Log is $(( LOG_SIZE / 1048576 )) MB — sending the last 3000 lines instead"
+      tail -n 3000 "$LOG_FILE" > /tmp/workflow_build_tail.log
+      send_file "/tmp/workflow_build_tail.log" "🪵 *Log tail* \`$(escape_md "${DEVICE}")\` (last 3000 lines) — [full run](${WORKFLOW_RUN_URL})"
+    else
+      send_file "$LOG_FILE" "🪵 *Workflow Log* \`$(escape_md "${DEVICE}")\`"
+    fi
   else
     echo "⚠️ Log file not available — skipping upload."
   fi
