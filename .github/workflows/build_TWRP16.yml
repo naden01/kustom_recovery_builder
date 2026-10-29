@@ -63,6 +63,15 @@ jobs:
         echo "Device Name: ${{ github.event.inputs.DEVICE_NAME }}"
         echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}image"
 
+    - name: Set device tree links
+      run: |
+        TREE="${{ github.event.inputs.DEVICE_TREE }}"
+        TREE="${TREE%/}"
+        TREE="${TREE%.git}"
+        echo "CLEAN_DEVICE_TREE=${TREE}" >> $GITHUB_ENV
+        echo "device tree (clean): ${TREE}"
+      continue-on-error: true
+
     - name: Cleanup
       uses: rokibhasansagar/slimhub_actions@main
       
