@@ -59,6 +59,15 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v3
       
+    - name: Set device tree links
+      run: |
+        TREE="${{ github.event.inputs.DEVICE_TREE }}"
+        TREE="${TREE%/}"
+        TREE="${TREE%.git}"
+        echo "CLEAN_DEVICE_TREE=${TREE}" >> $GITHUB_ENV
+        echo "device tree (clean): ${TREE}"
+      continue-on-error: true
+
     - name: Clean-up
       uses: rokibhasansagar/slimhub_actions@main
 
@@ -119,11 +128,26 @@ jobs:
       id: fox_branch
       with:
         cond: ${{ github.event.inputs.MANIFEST_BRANCH == '11.0' || github.event.inputs.MANIFEST_BRANCH == '12.1' }}
-        if_true: lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image
-        if_false: lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}image
+        if_true: lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-eng && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image
+        if_false: lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && mka ${{ github.event.inputs.BUILD_TARGET }}image
       continue-on-error: true
      
+    - name: Restore ccache
+      uses: actions/cache/restore@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+        restore-keys: |
+          ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-
+      continue-on-error: true
     - name: Building OrangeFox
+      env:
+        USE_CCACHE: "1"
+        CCACHE_EXEC: /usr/bin/ccache
+        CCACHE_DIR: /home/runner/.ccache
+        CCACHE_MAXSIZE: "4G"
+        CCACHE_COMPRESS: "1"
+        CCACHE_COMPILERCHECK: "content"
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
         set +e
@@ -133,6 +157,14 @@ jobs:
         ${{ steps.fox_branch.outputs.value }}
       continue-on-error: true
       
+    - name: Save ccache
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+      continue-on-error: true
+
     - name: Set Build Date # For Build Date Info, currently using Asia/Manila
       run: |
         echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
@@ -165,8 +197,8 @@ jobs:
         tag_name: ${{ github.run_id }}
         body: |
           Build: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: [Device Tree/Branch](${{ github.event.inputs.DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
-          Commit: Most recent [commit](${{ github.event.inputs.DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
+          Device: [Device Tree/Branch](${{ env.CLEAN_DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
+          Commit: Most recent [commit](${{ env.CLEAN_DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
           MD5 (img): ${{ env.MD5_IMG }}
           MD5 (zip): ${{ env.MD5_ZIP }}
         continue-on-error: true
