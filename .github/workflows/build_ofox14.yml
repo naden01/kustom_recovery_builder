@@ -119,14 +119,29 @@ jobs:
     - name: Check Manifest Branch
       run: |
         if [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "16.0" ]; then
-            echo "LUNCH_CMD=lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-bp2a-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
+            echo "LUNCH_CMD=lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-bp2a-eng && mka ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
         elif [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "11.0" ] || [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "12.1" ] || [ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "14.1" ]; then
-            echo "LUNCH_CMD=lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-ap2a-eng && make clean && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
+            echo "LUNCH_CMD=lunch twrp_${{ github.event.inputs.DEVICE_NAME }}-ap2a-eng && mka adbd ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
         else
-            echo "LUNCH_CMD=lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && make clean && mka ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
+            echo "LUNCH_CMD=lunch omni_${{ github.event.inputs.DEVICE_NAME }}-eng && mka ${{ github.event.inputs.BUILD_TARGET }}image" >> $GITHUB_ENV
         fi
       continue-on-error: true
+    - name: Restore ccache
+      uses: actions/cache/restore@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+        restore-keys: |
+          ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-
+      continue-on-error: true
     - name: Building OrangeFox
+      env:
+        USE_CCACHE: "1"
+        CCACHE_EXEC: /usr/bin/ccache
+        CCACHE_DIR: /home/runner/.ccache
+        CCACHE_MAXSIZE: "4G"
+        CCACHE_COMPRESS: "1"
+        CCACHE_COMPILERCHECK: "content"
       run: |
         cd ${GITHUB_WORKSPACE}/OrangeFox/fox_${{ github.event.inputs.MANIFEST_BRANCH }}
         set +e
@@ -136,6 +151,14 @@ jobs:
         eval "${LUNCH_CMD}"
       continue-on-error: true
       
+    - name: Save ccache
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+      continue-on-error: true
+
     - name: Set Build Date # For Build Date Info, currently using Asia/Manila
       run: |
         echo "BUILD_DATE=$(TZ=Asia/Manila date +%Y%m%d)" >> $GITHUB_ENV
