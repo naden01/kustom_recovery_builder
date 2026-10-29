@@ -84,6 +84,7 @@ jobs:
             build-essential libgtk-3-dev libglu1-mesa-dev freeglut3-dev git libxml2 lzop pngcrush schedtool squashfs-tools \
             imagemagick libbz2-dev lzma ncftp qemu-user-static libstdc++-10-dev libncurses6 python3 tar
 
+      continue-on-error: true
     - name: Install OpenJDK
       uses: actions/setup-java@v4
       with:
