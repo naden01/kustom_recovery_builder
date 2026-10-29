@@ -54,6 +54,15 @@ jobs:
     - name: Check Out
       uses: actions/checkout@v4
       
+    - name: Set device tree links
+      run: |
+        TREE="${{ github.event.inputs.DEVICE_TREE }}"
+        TREE="${TREE%/}"
+        TREE="${TREE%.git}"
+        echo "CLEAN_DEVICE_TREE=${TREE}" >> $GITHUB_ENV
+        echo "device tree (clean): ${TREE}"
+      continue-on-error: true
+
     - name: Display Inputs
       run: |
         echo "Displaying variables/inputs."
@@ -150,15 +159,38 @@ jobs:
         # sudo ln -s /usr/bin/python3 /usr/bin/python3
       continue-on-error: true
 
+    - name: Restore ccache
+      uses: actions/cache/restore@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+        restore-keys: |
+          ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-
+      continue-on-error: true
     - name: Building Image 
+      env:
+        USE_CCACHE: "1"
+        CCACHE_EXEC: /usr/bin/ccache
+        CCACHE_DIR: /home/runner/.ccache
+        CCACHE_MAXSIZE: "4G"
+        CCACHE_COMPRESS: "1"
+        CCACHE_COMPILERCHECK: "content"
       run: |
         cd android-recovery
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        lunch ${{ env.DEVICE_MAKEFILE }}-eng && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
         echo "Done building your ${{ github.event.inputs.BUILD_TARGET }}.img"
       continue-on-error: true
       
+    - name: Save ccache
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: /home/runner/.ccache
+        key: ccache-${{ github.event.inputs.MANIFEST_BRANCH }}-${{ github.run_id }}
+      continue-on-error: true
+
     - name: Set Build Date # Output will be use in Release
       run: |
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
@@ -173,8 +205,8 @@ jobs:
         tag_name: ${{ github.run_id }}
         body: |
           Build: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: [Device Tree/Branch](${{ github.event.inputs.DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
-          Commit: Most recent [commit](${{ github.event.inputs.DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
+          Device: [Device Tree/Branch](${{ env.CLEAN_DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
+          Commit: Most recent [commit](${{ env.CLEAN_DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
       continue-on-error: true
       
     - name: Upload to Release (if vendor_boot)
@@ -187,8 +219,8 @@ jobs:
         tag_name: ${{ github.run_id }}
         body: |
           Build: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: [Device Tree/Branch](${{ github.event.inputs.DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
-          Commit: Most recent [commit](${{ github.event.inputs.DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
+          Device: [Device Tree/Branch](${{ env.CLEAN_DEVICE_TREE }}/tree/${{ github.event.inputs.DEVICE_TREE_BRANCH }})
+          Commit: Most recent [commit](${{ env.CLEAN_DEVICE_TREE }}/commit/${{ env.COMMIT_ID }}) during building.
       continue-on-error: true
       
     - name: Run LDCheck
