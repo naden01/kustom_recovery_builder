@@ -37,7 +37,9 @@ RUN_ID="${14}"
 #  Helpers
 # ─────────────────────────────────────────────
 escape_md() {
-  printf '%s' "$1" | sed 's/[_*\[\]()~`>#+\-=|{}.!\\]/\\&/g'
+  # ']' goes first and '-' last: inside a POSIX bracket expression backslashes are
+  # literal, so the previous '[_\*\[\]...' class closed at the '\]' and matched nothing
+  printf '%s' "$1" | sed 's/[]_*[()~`>#+=|{}.!\-]/\\&/g'
 }
 
 send_message() {
@@ -162,8 +164,10 @@ fi
 if [[ "$MODE" == "release" ]]; then
   CLEAN_TREE=$(printf '%s' "${DEVICE_TREE}" | sed -e 's#/$##' -e 's#\.git$##' -e 's#/$##')
   if [[ -n "$CLEAN_TREE" ]]; then
-    COMMIT_LINE="📝 *Commit*: [${COMMIT_ID:0:7}](${CLEAN_TREE}/commit/${COMMIT_ID})"
-    TREE_LINE="🌳 *Tree*: [${CLEAN_TREE##*/}](${CLEAN_TREE}/tree/${BRANCH})"
+    # link text must be escaped too: an unescaped '_' inside [..] opens an italic
+    # entity, so the closing ']' is rejected by Telegram's MarkdownV2 parser
+    COMMIT_LINE="📝 *Commit*: [$(escape_md "${COMMIT_ID:0:7}")](${CLEAN_TREE}/commit/${COMMIT_ID})"
+    TREE_LINE="🌳 *Tree*: [$(escape_md "${CLEAN_TREE##*/}")](${CLEAN_TREE}/tree/${BRANCH})"
   else
     COMMIT_LINE="📝 *Commit*: \`${COMMIT_ID:0:7}\`"
     TREE_LINE=""
